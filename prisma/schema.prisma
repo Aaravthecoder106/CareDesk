@@ -1,0 +1,223 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  pool     = { min = 2, max = 20 }
+}
+
+// ─── ENUMS ───────────────────────────────────────────────
+
+enum UserRole {
+  PATIENT
+  CAREGIVER
+  DOCTOR
+}
+
+enum Plan {
+  FREE
+  PREMIUM
+  FAMILY
+}
+
+enum AlertType {
+  MEDICATION
+  ABNORMAL
+  APPOINTMENT
+}
+
+enum UsageAction {
+  UPLOAD_REPORT
+  ADD_FAMILY_MEMBER
+  ANALYZE_REPORT
+  GENERATE_QUESTIONS
+  SUMMARIZE_VISIT
+}
+
+// ─── MODELS ──────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(uuid()) @db.Uuid
+  clerkId       String   @unique @map("clerk_id")
+  name          String
+  email         String   @unique
+  role          UserRole @default(PATIENT)
+  plan          Plan     @default(FREE)
+  stripeCustomerId String? @map("stripe_customer_id")
+  razorpayCustomerId String? @map("razorpay_customer_id")
+  subscriptionId String? @map("subscription_id")
+  planExpiresAt DateTime? @map("plan_expires_at")
+  onboarded     Boolean  @default(false)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  familyMembers  FamilyMember[]
+  reports        Report[]
+  visits         Visit[]
+  alerts         Alert[]
+  usage          UsageTracker[]
+
+  @@index([plan])
+  @@index([stripeCustomerId])
+  @@index([subscriptionId])
+  @@map("users")
+}
+
+model FamilyMember {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  name        String
+  relationship String
+  dateOfBirth DateTime? @map("date_of_birth")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reports      Report[]
+  visits       Visit[]
+  medications  Medication[]
+  alerts       Alert[]
+
+  @@index([userId])
+  @@index([name])
+  @@map("family_members")
+}
+
+model Report {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  familyMemberId String?  @map("family_member_id") @db.Uuid
+  fileUrl        String   @map("file_url")
+  fileName       String   @map("file_name")
+  fileType       String   @map("file_type")
+  fileSize       Int      @map("file_file_size")
+  uploadDate     DateTime @default(now()) @map("upload_date")
+  aiSummary      String?  @map("ai_summary") @db.Text
+  rawMetrics     Json?    @map("raw_metrics")
+  processed      Boolean  @default(false)
+  processingError String? @map("processing_error") @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  familyMember FamilyMember? @relation(fields: [familyMemberId], references: [id], onDelete: SetNull)
+  metrics      Metric[]
+
+  @@index([userId])
+  @@index([familyMemberId])
+  @@index([uploadDate])
+  @@index([processed])
+  @@map("reports")
+}
+
+model Metric {
+  id               String   @id @default(uuid()) @db.Uuid
+  reportId         String   @map("report_id") @db.Uuid
+  metricName       String   @map("metric_name")
+  value            Decimal  @db.Decimal(10, 3)
+  unit             String
+  normalRangeLow   Decimal? @map("normal_range_low") @db.Decimal(10, 3)
+  normalRangeHigh  Decimal? @map("normal_range_high") @db.Decimal(10, 3)
+  isAbnormal       Boolean  @default(false) @map("is_abnormal")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@index([metricName])
+  @@map("metrics")
+}
+
+model Visit {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  familyMemberId String?  @map("family_member_id") @db.Uuid
+  visitDate      DateTime @map("visit_date")
+  doctorName     String?  @map("doctor_name")
+  specialty      String?
+  symptoms       String[]
+  aiQuestions    String?  @map("ai_questions") @db.Text
+  doctorNotes    String?  @map("doctor_notes") @db.Text
+  summary        String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  familyMember FamilyMember? @relation(fields: [familyMemberId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([familyMemberId])
+  @@index([visitDate])
+  @@map("visits")
+}
+
+model Medication {
+  id             String   @id @default(uuid()) @db.Uuid
+  familyMemberId String   @map("family_member_id") @db.Uuid
+  name           String
+  dosage         String
+  frequency      String
+  startDate      DateTime @map("start_date")
+  endDate        DateTime? @map("end_date")
+  active         Boolean  @default(true)
+  notes          String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  familyMember FamilyMember @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+
+  @@index([familyMemberId])
+  @@index([active])
+  @@index([name])
+  @@map("medications")
+}
+
+model Alert {
+  id             String    @id @default(uuid()) @db.Uuid
+  familyMemberId String    @map("family_member_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  alertType      AlertType @map("alert_type")
+  title          String
+  message        String    @db.Text
+  sentAt         DateTime  @default(now()) @map("sent_at")
+  read           Boolean   @default(false)
+  readAt         DateTime? @map("read_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  familyMember FamilyMember @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([familyMemberId])
+  @@index([userId])
+  @@map("alerts")
+}
+
+model UsageTracker {
+  id        String       @id @default(uuid()) @db.Uuid
+  userId    String       @map("user_id") @db.Uuid
+  action    UsageAction
+  count     Int          @default(1)
+  period    String
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, action, period])
+  @@index([userId])
+  @@index([action])
+  @@map("usage_tracker")
+}
+
+model ProcessedWebhookEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  eventId      String   @unique @map("event_id")
+  source       String
+  processedAt  DateTime @default(now()) @map("processed_at")
+
+  @@index([source])
+  @@index([processedAt])
+  @@map("processed_webhook_events")
+}

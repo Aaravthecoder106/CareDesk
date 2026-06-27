@@ -12,6 +12,16 @@ const STRIPE_IPS = [
   "44.232.53.0/24",
 ];
 
+const RAZORPAY_IPS = [
+  "52.66.116.135",
+  "52.66.143.178",
+  "13.232.126.106",
+  "13.233.163.245",
+  "103.149.201.0/24",
+  "103.7.136.0/24",
+  "182.18.184.0/24",
+];
+
 function ipToNumber(ip: string): number {
   const parts = ip.split(".").map(Number);
   return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
@@ -58,4 +68,8 @@ export function webhookIpAllowlist(allowedCidrs: string[]) {
 
 export function stripeWebhookIpAllowlist() {
   return webhookIpAllowlist(STRIPE_IPS);
+}
+
+export function razorpayWebhookIpAllowlist() {
+  return webhookIpAllowlist(RAZORPAY_IPS);
 }

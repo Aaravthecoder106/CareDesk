@@ -49,7 +49,8 @@ app.use("/api/", apiLimiter);
 
 const webhookLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, message: { error: "Webhook rate limit exceeded" } });
 app.use("/api/auth/webhook", webhookLimiter);
-app.use("/api/subscriptions/webhook", webhookLimiter);
+app.use("/api/subscriptions/webhook/stripe", webhookLimiter);
+app.use("/api/subscriptions/webhook/razorpay", webhookLimiter);
 
 const healthLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: "Too many health checks" } });
 app.get("/health", healthLimiter, (_req, res) => { res.json({ status: "ok" }); });

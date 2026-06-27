@@ -1,6 +1,9 @@
 import { AIAnalysisResult } from "../types";
 import { withRetry, CircuitBreaker, withTimeout } from "../utils/retry";
 import { sanitizeForPrompt } from "../utils/sanitize";
+import { AI_CONFIG, getActiveProvider, type AIProvider } from "../config/ai";
+
+// ─── Prompts ────────────────────────────────────────────
 
 const ANALYSIS_PROMPT = `You are a medical report analysis assistant. Analyze the following medical report and extract key information.
 
@@ -29,63 +32,18 @@ Rules:
 6. If you cannot determine a normal range, use null
 7. Return ONLY valid JSON, no additional text`;
 
-let anthropicInstance: any = null;
+const QUESTION_PROMPT = `You are a medical visit preparation assistant. Based on the following information, generate 5-7 smart questions the patient should ask their doctor.
 
-async function getAnthropic() {
-  if (!anthropicInstance) {
-    const { default: Anthropic } = await import("@anthropic-ai/sdk");
-    anthropicInstance = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
-  }
-  return anthropicInstance;
-}
+Return ONLY a JSON array of question strings.`;
 
-const AI_TIMEOUT = 30000;
-const aiCircuitBreaker = new CircuitBreaker(5, 60000);
+const SUMMARY_PROMPT = `Summarize the following doctor visit notes in clear, patient-friendly language. Highlight key findings, diagnoses, and next steps.`;
 
-async function callClaudeWithTimeout(messages: any[], maxTokens: number, timeoutMs = AI_TIMEOUT): Promise<string> {
-  if (process.env.USE_MOCK_AI === "true") {
-    return "";
-  }
+// ─── Shared utilities ───────────────────────────────────
 
-  if (aiCircuitBreaker.isOpen()) {
-    throw new Error("AI circuit breaker is open; too many recent failures");
-  }
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const anthropic = await getAnthropic();
-    type AnthropicMessage = { content: Array<{ type: string; text?: string }> };
-    const message = await withRetry<AnthropicMessage>(
-      () =>
-        withTimeout<AnthropicMessage>(
-          () =>
-            anthropic.messages.create(
-              {
-                model: "claude-sonnet-4-20250514",
-                max_tokens: maxTokens,
-                messages,
-              },
-              {
-                signal: controller.signal,
-              }
-            ) as Promise<AnthropicMessage>,
-          timeoutMs
-        ),
-      { maxAttempts: 2, baseDelayMs: 2000, maxDelayMs: 5000 }
-    );
-    aiCircuitBreaker.recordSuccess();
-    return message.content[0].type === "text" ? message.content[0].text || "" : "";
-  } catch (error) {
-    aiCircuitBreaker.recordFailure();
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
+const aiCircuitBreaker = new CircuitBreaker(
+  AI_CONFIG.circuitBreaker.threshold,
+  AI_CONFIG.circuitBreaker.resetTimeoutMs
+);
 
 function parseJSONStrict<T>(text: string, expectedKeys?: string[]): T {
   const trimmed = text.trim();
@@ -115,6 +73,125 @@ function parseJSONStrict<T>(text: string, expectedKeys?: string[]): T {
   return result;
 }
 
+// ─── Claude Provider ────────────────────────────────────
+
+let anthropicInstance: any = null;
+
+async function getAnthropic() {
+  if (!anthropicInstance) {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    anthropicInstance = new Anthropic({
+      apiKey: AI_CONFIG.claude.apiKey,
+    });
+  }
+  return anthropicInstance;
+}
+
+async function callClaude(
+  messages: Array<{ role: string; content: string }>,
+  maxTokens: number
+): Promise<string> {
+  if (aiCircuitBreaker.isOpen()) {
+    throw new Error("AI circuit breaker is open; too many recent failures");
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), AI_CONFIG.timeout);
+
+  try {
+    const anthropic = await getAnthropic();
+    type AnthropicMessage = { content: Array<{ type: string; text?: string }> };
+    const message = await withRetry<AnthropicMessage>(
+      () =>
+        withTimeout<AnthropicMessage>(
+          () =>
+            anthropic.messages.create(
+              {
+                model: AI_CONFIG.claude.model,
+                max_tokens: maxTokens,
+                messages,
+              },
+              { signal: controller.signal }
+            ) as Promise<AnthropicMessage>,
+          AI_CONFIG.timeout
+        ),
+      AI_CONFIG.retry
+    );
+    aiCircuitBreaker.recordSuccess();
+    return message.content[0].type === "text" ? message.content[0].text || "" : "";
+  } catch (error) {
+    aiCircuitBreaker.recordFailure();
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// ─── Gemini Provider ────────────────────────────────────
+
+let geminiInstance: any = null;
+
+async function getGemini() {
+  if (!geminiInstance) {
+    const { GoogleGenerativeAI } = await import("@google/generative-ai");
+    geminiInstance = new GoogleGenerativeAI(AI_CONFIG.gemini.apiKey);
+  }
+  return geminiInstance;
+}
+
+async function callGemini(
+  systemPrompt: string,
+  userContent: string,
+  maxTokens: number
+): Promise<string> {
+  if (aiCircuitBreaker.isOpen()) {
+    throw new Error("AI circuit breaker is open; too many recent failures");
+  }
+
+  try {
+    const genAI = await getGemini();
+    const model = genAI.getGenerativeModel({
+      model: AI_CONFIG.gemini.model,
+      systemInstruction: systemPrompt,
+      generationConfig: {
+        maxOutputTokens: maxTokens,
+        temperature: 0.3,
+      },
+    });
+
+    const result = await withRetry<{ response: { text: () => string } }>(
+      () =>
+        withTimeout(
+          () => model.generateContent(userContent),
+          AI_CONFIG.timeout
+        ),
+      AI_CONFIG.retry
+    );
+
+    aiCircuitBreaker.recordSuccess();
+    return result.response.text();
+  } catch (error) {
+    aiCircuitBreaker.recordFailure();
+    throw error;
+  }
+}
+
+// ─── Unified provider call ──────────────────────────────
+
+async function callAI(
+  systemPrompt: string,
+  userContent: string,
+  maxTokens: number
+): Promise<string> {
+  const provider = getActiveProvider();
+  if (provider === "gemini") {
+    return callGemini(systemPrompt, userContent, maxTokens);
+  }
+  return callClaude([{ role: "user", content: userContent }], maxTokens);
+}
+
+// ─── Exported functions ─────────────────────────────────
+
 export async function analyzeReport(
   reportText: string,
   reportType?: string
@@ -126,10 +203,8 @@ export async function analyzeReport(
     }
 
     const safeReportType = sanitizeForPrompt(reportType || "Unknown").substring(0, 100);
-    const responseText = await callClaudeWithTimeout(
-      [{ role: "user", content: `${ANALYSIS_PROMPT}\n\nReport Type: ${safeReportType}\n\nReport Content:\n${sanitizeForPrompt(reportText)}` }],
-      2048
-    );
+    const userContent = `Report Type: ${safeReportType}\n\nReport Content:\n${sanitizeForPrompt(reportText)}`;
+    const responseText = await callAI(ANALYSIS_PROMPT, userContent, 2048);
     return parseJSONStrict<AIAnalysisResult>(responseText, ["summary", "metrics", "anomalies"]);
   } catch (error) {
     console.error("AI analysis error:", error);
@@ -148,10 +223,8 @@ export async function generateVisitQuestions(
       return mockQuestions;
     }
 
-    const responseText = await callClaudeWithTimeout(
-      [{ role: "user", content: `You are a medical visit preparation assistant. Based on the following information, generate 5-7 smart questions the patient should ask their doctor.\n\nSymptoms: ${sanitizeForPrompt(symptoms.join(", "))}\nRecent Lab Results: ${sanitizeForPrompt(recentMetrics.join(", "))}\nKnown Conditions: ${sanitizeForPrompt(conditions.join(", "))}\n\nReturn ONLY a JSON array of question strings.` }],
-      1024
-    );
+    const userContent = `Symptoms: ${sanitizeForPrompt(symptoms.join(", "))}\nRecent Lab Results: ${sanitizeForPrompt(recentMetrics.join(", "))}\nKnown Conditions: ${sanitizeForPrompt(conditions.join(", "))}`;
+    const responseText = await callAI(QUESTION_PROMPT, userContent, 1024);
     return parseJSONStrict<string[]>(responseText);
   } catch (error) {
     console.error("AI question generation error:", error);
@@ -166,10 +239,7 @@ export async function summarizeVisit(doctorNotes: string): Promise<string> {
       return mockSummary;
     }
 
-    return await callClaudeWithTimeout(
-      [{ role: "user", content: `Summarize the following doctor visit notes:\n\n${sanitizeForPrompt(doctorNotes)}` }],
-      1024
-    );
+    return await callAI(SUMMARY_PROMPT, sanitizeForPrompt(doctorNotes), 1024);
   } catch (error) {
     console.error("AI visit summary error:", error);
     throw new Error(`Failed to summarize visit: ${(error as Error).message}`);

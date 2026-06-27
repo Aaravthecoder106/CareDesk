@@ -18,6 +18,7 @@ enum UserRole {
 
 enum Plan {
   FREE
+  BASIC
   PREMIUM
   FAMILY
 }

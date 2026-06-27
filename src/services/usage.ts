@@ -1,9 +1,11 @@
 import prisma from "../utils/prisma";
-import { UsageAction } from "@prisma/client";
+import { UsageAction, Plan } from "@prisma/client";
 
-const FREE_LIMITS = {
-  REPORTS: 3,
-  FAMILY_MEMBERS: 1,
+const PLAN_LIMITS: Record<Plan, { reports: number; familyMembers: number }> = {
+  FREE: { reports: 3, familyMembers: 1 },
+  BASIC: { reports: 10, familyMembers: 2 },
+  PREMIUM: { reports: -1, familyMembers: 4 },
+  FAMILY: { reports: -1, familyMembers: 6 },
 };
 
 export class UsageService {
@@ -39,25 +41,28 @@ export class UsageService {
   ) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new Error("User not found");
-    if (user.plan !== "FREE") return { blocked: false };
+
+    const limits = PLAN_LIMITS[user.plan];
 
     switch (trigger) {
       case "UPLOAD_REPORT": {
+        if (limits.reports === -1) return { blocked: false };
         const count = await prisma.report.count({ where: { userId } });
         return {
-          blocked: count >= FREE_LIMITS.REPORTS,
+          blocked: count >= limits.reports,
           current: count,
-          limit: FREE_LIMITS.REPORTS,
-          message: "Free plan limited to 3 reports. Upgrade to Premium for unlimited uploads.",
+          limit: limits.reports,
+          message: `Your ${user.plan} plan allows ${limits.reports} reports. Upgrade for more.`,
         };
       }
       case "ADD_FAMILY_MEMBER": {
+        if (limits.familyMembers === -1) return { blocked: false };
         const count = await prisma.familyMember.count({ where: { userId } });
         return {
-          blocked: count >= FREE_LIMITS.FAMILY_MEMBERS,
+          blocked: count >= limits.familyMembers,
           current: count,
-          limit: FREE_LIMITS.FAMILY_MEMBERS,
-          message: "Free plan limited to 1 family member. Upgrade to Premium for up to 6.",
+          limit: limits.familyMembers,
+          message: `Your ${user.plan} plan allows ${limits.familyMembers} family members. Upgrade for more.`,
         };
       }
       default:

@@ -329,13 +329,21 @@ async function runTests() {
     r = await req("GET", "/api/subscriptions/status", CAREGIVER_TOKEN);
     record("GET", "/api/subscriptions/status", "caregiver", 200, r.status, r.data);
 
-    // Patient - create Stripe checkout (needs real key to work)
-    r = await req("POST", "/api/subscriptions/stripe/checkout", PATIENT_TOKEN);
-    record("POST", "/api/subscriptions/stripe/checkout", "patient", r.status, r.status, r.data);
+    // Patient - create unified checkout (routes to Stripe or Razorpay based on currency)
+    r = await req("POST", "/api/subscriptions/checkout", PATIENT_TOKEN, { plan: "premium", period: "monthly", currency: "USD" });
+    record("POST", "/api/subscriptions/checkout [USD]", "patient", r.status, r.status, r.data);
 
-    // Patient - create Razorpay order (needs real key)
-    r = await req("POST", "/api/subscriptions/razorpay/order", PATIENT_TOKEN);
-    record("POST", "/api/subscriptions/razorpay/order", "patient", r.status, r.status, r.data);
+    // Patient - create unified checkout (INR routes to Razorpay)
+    r = await req("POST", "/api/subscriptions/checkout", PATIENT_TOKEN, { plan: "premium", period: "monthly", currency: "INR" });
+    record("POST", "/api/subscriptions/checkout [INR]", "patient", r.status, r.status, r.data);
+
+    // Patient - cancel subscription (no active sub in test)
+    r = await req("POST", "/api/subscriptions/cancel", PATIENT_TOKEN);
+    record("POST", "/api/subscriptions/cancel", "patient", r.status, r.status, r.data);
+
+    // Patient - billing portal (no Stripe customer in test)
+    r = await req("POST", "/api/subscriptions/portal", PATIENT_TOKEN);
+    record("POST", "/api/subscriptions/portal", "patient", r.status, r.status, r.data);
   }
 
   // ─── 404 HANDLING ─────────────────────────────────────

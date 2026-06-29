@@ -20,6 +20,9 @@ async function startServer() {
       catch { console.warn("Redis unavailable, proceeding without cache"); }
     } else { console.warn("Redis not configured, proceeding without cache"); }
 
+    const { logAIConfig } = await import("./config/ai");
+    logAIConfig();
+
     const { acquireLock } = await import("./utils/lock");
 
     cron.schedule("0 8 * * *", async () => {

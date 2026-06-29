@@ -11,15 +11,22 @@ export const AI_CONFIG = {
   },
   gemini: {
     apiKey: process.env.GOOGLE_AI_API_KEY || "",
-    model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+    model: process.env.GEMINI_MODEL || "gemini-1.5-flash",
   },
 } as const;
 
 export function getActiveProvider(): AIProvider {
   const provider = AI_CONFIG.provider;
   if (provider !== "claude" && provider !== "gemini") {
-    console.warn(`Unknown AI_PROVIDER "${provider}", falling back to claude`);
+    console.warn(`[AI] Unknown AI_PROVIDER "${provider}", falling back to claude`);
     return "claude";
   }
   return provider;
+}
+
+export function logAIConfig() {
+  const provider = getActiveProvider();
+  const key = provider === "gemini" ? AI_CONFIG.gemini.apiKey : AI_CONFIG.claude.apiKey;
+  const masked = key ? `${key.substring(0, 8)}...${key.substring(key.length - 4)}` : "(empty)";
+  console.log(`[AI] Provider: ${provider} | Model: ${provider === "gemini" ? AI_CONFIG.gemini.model : AI_CONFIG.claude.model} | Key: ${masked}`);
 }

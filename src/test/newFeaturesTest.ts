@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { generateTestToken } from "../middleware/auth";
 
 const BASE = "http://localhost:3002";

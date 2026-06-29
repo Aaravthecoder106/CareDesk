@@ -17,25 +17,33 @@ import categoryRoutes from "./routes/category";
 import chatRoutes from "./routes/chat";
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
-if (FRONTEND_URL === "*" || FRONTEND_URL === "") {
-  console.error("FRONTEND_URL must be a valid origin, not '*' or empty");
-  process.exit(1);
-}
-try {
-  const parsed = new URL(FRONTEND_URL);
-  if (!["http:", "https:"].includes(parsed.protocol)) {
-    console.error("FRONTEND_URL must use http:// or https:// protocol");
-    process.exit(1);
-  }
-} catch {
-  console.error("FRONTEND_URL is not a valid URL");
-  process.exit(1);
+
+const ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "https://caredesk-mvp.vercel.app",
+];
+const ALLOWED_ORIGIN_REGEX = [/^https:\/\/caredesk-.*\.vercel\.app$/];
+
+function isAllowedOrigin(origin: string | undefined): boolean {
+  if (!origin) return true;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  return ALLOWED_ORIGIN_REGEX.some((re) => re.test(origin));
 }
 
 const app = express();
 
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
-app.use(cors({ origin: FRONTEND_URL, credentials: true, methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"], allowedHeaders: ["Content-Type", "Authorization", "X-Request-ID"] }));
+app.use(cors({
+  origin: (origin, cb) => {
+    if (isAllowedOrigin(origin)) return cb(null, true);
+    console.warn(`[CORS] Blocked origin: ${origin}`);
+    cb(null, false);
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Request-ID"],
+}));
 app.use(requestId);
 
 app.use(express.json({ limit: "10mb" }));

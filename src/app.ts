@@ -13,6 +13,8 @@ import visitRoutes from "./routes/visit";
 import medicationRoutes from "./routes/medication";
 import alertRoutes from "./routes/alert";
 import subscriptionRoutes from "./routes/subscription";
+import categoryRoutes from "./routes/category";
+import chatRoutes from "./routes/chat";
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 if (FRONTEND_URL === "*" || FRONTEND_URL === "") {
@@ -62,6 +64,8 @@ app.use("/api/visits", visitRoutes);
 app.use("/api/medications", medicationRoutes);
 app.use("/api/alerts", alertRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/chat", chatRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

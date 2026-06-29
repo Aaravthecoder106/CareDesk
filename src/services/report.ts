@@ -48,8 +48,8 @@ export class ReportService {
     return await prisma.$transaction(async (tx) => {
       const reportCount = await tx.report.count({ where: { userId } });
 
-      if (user.plan === "FREE" && reportCount >= 3) {
-        const error = new Error("Free plan limited to 3 reports. Upgrade to Premium.");
+      if (user.plan === "FREE" && reportCount >= 5) {
+        const error = new Error("Free plan limited to 5 reports. Upgrade for more.");
         (error as any).code = "PAYWALL";
         (error as any).trigger = "UPLOAD_REPORT";
         throw error;
@@ -205,6 +205,62 @@ export class ReportService {
     });
     if (!report) throw new Error("Report not found");
     return report;
+  }
+
+  async getAllReports(userId: string, page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+
+    const [reports, total] = await Promise.all([
+      prisma.report.findMany({
+        where: { userId },
+        include: {
+          metrics: true,
+          familyMember: { select: { id: true, name: true } },
+        },
+        orderBy: { uploadDate: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.report.count({ where: { userId } }),
+    ]);
+
+    return {
+      data: reports,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async getJourney(userId: string) {
+    const reports = await prisma.report.findMany({
+      where: { userId },
+      include: {
+        metrics: true,
+        familyMember: { select: { id: true, name: true, relationship: true } },
+      },
+      orderBy: { uploadDate: "desc" },
+    });
+
+    const grouped: Record<string, typeof reports> = {};
+    for (const report of reports) {
+      const date = new Date(report.uploadDate);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(report);
+    }
+
+    const timeline = Object.entries(grouped).map(([monthKey, reports]) => ({
+      month: monthKey,
+      label: new Date(monthKey + "-01").toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+      reports,
+    }));
+
+    return {
+      totalReports: reports.length,
+      timeline,
+    };
   }
 
   async getTimeline(userId: string, familyMemberId: string, page = 1, limit = 20) {

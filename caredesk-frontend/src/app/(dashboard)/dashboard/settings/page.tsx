@@ -58,7 +58,7 @@ export default function SettingsPage() {
       }, token);
 
       if (res.gateway === "stripe" && res.url) {
-        window.location.href = res.url;
+        window.location.assign(res.url);
       } else if (res.gateway === "razorpay" && res.orderId && res.amount && res.currency && res.key) {
         handleRazorpayPayment({ orderId: res.orderId, amount: res.amount, currency: res.currency, key: res.key }, selectedPlan, token);
       }

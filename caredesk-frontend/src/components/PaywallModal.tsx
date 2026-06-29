@@ -13,7 +13,7 @@ interface PaywallModalProps {
 const paywallContent = {
   report: {
     title: "Upload Limit Reached",
-    description: "You've used all 3 free report uploads. Upgrade to continue uploading and get AI-powered analysis.",
+    description: "You've used all 5 free report uploads. Upgrade to continue uploading and get AI-powered analysis.",
     icon: "📊",
   },
   family: {
@@ -62,7 +62,7 @@ export default function PaywallModal({ isOpen, onClose, trigger }: PaywallModalP
             </div>
             <p className="text-[10px] text-slate-400 mt-0.5">or {formatUSD(39)}/year — save 28%</p>
             <ul className="mt-2 space-y-0.5">
-              {["2 family members", "10 report uploads", "AI analysis + trends"].map((f) => (
+              {["2 family members", "50 report uploads", "AI analysis + trends"].map((f) => (
                 <li key={f} className="flex items-center gap-2 text-xs text-slate-600">
                   <CheckCircle className="w-3 h-3 text-green-500 shrink-0" />{f}
                 </li>

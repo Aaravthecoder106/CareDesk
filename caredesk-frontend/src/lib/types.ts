@@ -28,6 +28,7 @@ export interface Report {
   id: string;
   userId: string;
   familyMemberId: string | null;
+  categoryId: string | null;
   fileUrl: string;
   fileName: string;
   fileType: string;
@@ -149,4 +150,41 @@ export interface TimelineEvent {
   date: string;
   entityId: string;
   createdAt: string;
+}
+
+export interface Category {
+  id: string;
+  userId: string;
+  name: string;
+  color: string;
+  createdAt: string;
+  _count?: { reports: number };
+}
+
+export interface ReportDigest {
+  id: string;
+  reportId: string;
+  userId: string;
+  categoryId: string | null;
+  summary: string;
+  keyFindings: string[];
+  analyzedAt: string;
+  report?: { fileName: string; uploadDate: string };
+}
+
+export interface ChatMessage {
+  id: string;
+  userId: string;
+  role: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface JourneyData {
+  totalReports: number;
+  timeline: {
+    month: string;
+    label: string;
+    reports: Report[];
+  }[];
 }

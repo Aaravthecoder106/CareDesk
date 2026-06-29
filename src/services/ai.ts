@@ -178,7 +178,7 @@ async function callGemini(
 
 // ─── Unified provider call ──────────────────────────────
 
-async function callAI(
+export async function callAI(
   systemPrompt: string,
   userContent: string,
   maxTokens: number

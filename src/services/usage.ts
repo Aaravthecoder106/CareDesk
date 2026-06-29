@@ -2,8 +2,8 @@ import prisma from "../utils/prisma";
 import { UsageAction, Plan } from "@prisma/client";
 
 const PLAN_LIMITS: Record<Plan, { reports: number; familyMembers: number }> = {
-  FREE: { reports: 3, familyMembers: 1 },
-  BASIC: { reports: 10, familyMembers: 2 },
+  FREE: { reports: 5, familyMembers: 1 },
+  BASIC: { reports: 50, familyMembers: 2 },
   PREMIUM: { reports: -1, familyMembers: 4 },
   FAMILY: { reports: -1, familyMembers: 6 },
 };

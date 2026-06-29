@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 
 interface ReportUploaderProps {
   familyMemberId?: string;
+  categoryId?: string;
   onUploadComplete?: (reportId: string) => void;
   onError?: (error: string) => void;
 }
@@ -18,7 +19,7 @@ interface UploadState {
   error?: string;
 }
 
-export default function ReportUploader({ familyMemberId, onUploadComplete, onError }: ReportUploaderProps) {
+export default function ReportUploader({ familyMemberId, categoryId, onUploadComplete, onError }: ReportUploaderProps) {
   const { getToken } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadState, setUploadState] = useState<UploadState>({ status: "idle" });
@@ -59,6 +60,7 @@ export default function ReportUploader({ familyMemberId, onUploadComplete, onErr
           fileType: selectedFile.type,
           fileSize: selectedFile.size,
           familyMemberId,
+          categoryId,
         },
         token
       );

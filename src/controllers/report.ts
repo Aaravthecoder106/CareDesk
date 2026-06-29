@@ -1,8 +1,29 @@
 import { AuthRequest } from "../types";
 import { successResponse, errorResponse, parsePagination } from "../utils/responses";
 import { reportService } from "../services/report";
+import { reportDigestService } from "../services/reportDigest";
+import prisma from "../utils/prisma";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const getAllReports = async (req: AuthRequest, res: any) => {
+  try {
+    const { page, limit } = parsePagination(req.query as any);
+    const result = await reportService.getAllReports(req.userId!, page, limit);
+    res.json(successResponse(result));
+  } catch (error) {
+    res.status(500).json(errorResponse((error as Error).message));
+  }
+};
+
+export const getJourney = async (req: AuthRequest, res: any) => {
+  try {
+    const result = await reportService.getJourney(req.userId!);
+    res.json(successResponse(result));
+  } catch (error) {
+    res.status(500).json(errorResponse((error as Error).message));
+  }
+};
 
 export const getUploadUrl = async (req: AuthRequest, res: any) => {
   try {
@@ -57,6 +78,11 @@ export const processReport = async (req: AuthRequest, res: any) => {
       req.userId!,
       reportId
     );
+
+    reportDigestService.digestReport(reportId).catch((err) =>
+      console.error(`Digest generation failed for report ${reportId}:`, err)
+    );
+
     res.json(successResponse(report, "Report processed successfully"));
   } catch (error) {
     res.status(500).json(errorResponse((error as Error).message));
@@ -132,6 +158,35 @@ export const getAvailableMetrics = async (req: AuthRequest, res: any) => {
       familyMemberId
     );
     res.json(successResponse(metrics));
+  } catch (error) {
+    res.status(500).json(errorResponse((error as Error).message));
+  }
+};
+
+export const assignCategory = async (req: AuthRequest, res: any) => {
+  try {
+    const reportId = String(req.params.reportId);
+    if (!UUID_REGEX.test(reportId)) {
+      return res.status(400).json(errorResponse("Invalid reportId: must be a valid UUID"));
+    }
+    const { categoryId } = req.body;
+    if (categoryId !== undefined && categoryId !== null && !UUID_REGEX.test(String(categoryId))) {
+      return res.status(400).json(errorResponse("categoryId must be a valid UUID or null"));
+    }
+
+    const report = await prisma.report.findFirst({ where: { id: reportId, userId: req.userId! } });
+    if (!report) return res.status(404).json(errorResponse("Report not found"));
+
+    if (categoryId) {
+      const category = await prisma.category.findFirst({ where: { id: categoryId, userId: req.userId! } });
+      if (!category) return res.status(404).json(errorResponse("Category not found"));
+    }
+
+    const updated = await prisma.report.update({
+      where: { id: reportId },
+      data: { categoryId: categoryId || null },
+    });
+    res.json(successResponse(updated, "Report category updated"));
   } catch (error) {
     res.status(500).json(errorResponse((error as Error).message));
   }

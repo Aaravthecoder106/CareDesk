@@ -59,6 +59,8 @@ model User {
   visits         Visit[]
   alerts         Alert[]
   usage          UsageTracker[]
+  categories     Category[]
+  chatMessages   ChatMessage[]
 
   @@index([plan])
   @@index([stripeCustomerId])
@@ -90,6 +92,7 @@ model Report {
   id             String   @id @default(uuid()) @db.Uuid
   userId         String   @map("user_id") @db.Uuid
   familyMemberId String?  @map("family_member_id") @db.Uuid
+  categoryId     String?  @map("category_id") @db.Uuid
   fileUrl        String   @map("file_url")
   fileName       String   @map("file_name")
   fileType       String   @map("file_type")
@@ -104,10 +107,13 @@ model Report {
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   familyMember FamilyMember? @relation(fields: [familyMemberId], references: [id], onDelete: SetNull)
+  category     Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   metrics      Metric[]
+  digests      ReportDigest[]
 
   @@index([userId])
   @@index([familyMemberId])
+  @@index([categoryId])
   @@index([uploadDate])
   @@index([processed])
   @@map("reports")
@@ -221,4 +227,54 @@ model ProcessedWebhookEvent {
   @@index([source])
   @@index([processedAt])
   @@map("processed_webhook_events")
+}
+
+model Category {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  name      String
+  color     String   @default("#5E78E6")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reports Report[]
+  digests ReportDigest[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("categories")
+}
+
+model ReportDigest {
+  id         String   @id @default(uuid()) @db.Uuid
+  reportId   String   @map("report_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  categoryId String?  @map("category_id") @db.Uuid
+  summary    String   @db.Text
+  keyFindings Json?   @map("key_findings")
+  analyzedAt DateTime @default(now()) @map("analyzed_at")
+
+  report   Report    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@unique([reportId])
+  @@index([userId])
+  @@index([categoryId])
+  @@index([analyzedAt])
+  @@map("report_digests")
+}
+
+model ChatMessage {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  role       String
+  content    String   @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("chat_messages")
 }

@@ -43,6 +43,21 @@ export const authenticate = async (
   next: NextFunction
 ) => {
   try {
+    // Temporary bypass for live testing — set SKIP_AUTH=true on Render to enable
+    if (process.env.SKIP_AUTH === "true") {
+      const fallbackUser = await prisma.user.findFirst({
+        select: { id: true, plan: true, role: true },
+      });
+      if (fallbackUser) {
+        req.clerkId = "mock-clerk-id";
+        req.userId = fallbackUser.id;
+        req.userPlan = fallbackUser.plan;
+        req.userRole = fallbackUser.role;
+        return next();
+      }
+      return res.status(401).json({ success: false, error: "No users in database" });
+    }
+
     const token = extractBearerToken(req.headers.authorization);
     if (!token) {
       return res.status(401).json({ success: false, error: "No token provided" });

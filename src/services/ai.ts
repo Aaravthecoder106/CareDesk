@@ -118,7 +118,11 @@ async function callClaude(
       AI_CONFIG.retry
     );
     aiCircuitBreaker.recordSuccess();
-    return message.content[0].type === "text" ? message.content[0].text || "" : "";
+    const text = message.content?.[0]?.type === "text" ? message.content[0].text : "";
+    if (!text || text.trim().length === 0) {
+      throw new Error("Claude returned an empty response");
+    }
+    return text;
   } catch (error) {
     aiCircuitBreaker.recordFailure();
     throw error;
@@ -159,7 +163,7 @@ async function callGemini(
       },
     });
 
-    const result = await withRetry<{ response: { text: () => string } }>(
+    const result = await withRetry<{ response?: { text?: () => string } }>(
       () =>
         withTimeout(
           () => model.generateContent(userContent),
@@ -168,8 +172,13 @@ async function callGemini(
       AI_CONFIG.retry
     );
 
+    const text = result?.response?.text?.();
+    if (!text || typeof text !== "string" || text.trim().length === 0) {
+      throw new Error("Gemini returned an empty response");
+    }
+
     aiCircuitBreaker.recordSuccess();
-    return result.response.text();
+    return text;
   } catch (error) {
     aiCircuitBreaker.recordFailure();
     throw error;

@@ -1,0 +1,87 @@
+services:
+  - type: web
+    name: caredesk-api
+    runtime: node
+    region: oregon
+    plan: starter
+    buildCommand: npm install && npx prisma generate && tsc
+    startCommand: node dist/index.js
+    healthCheckPath: /health
+    envVars:
+      # Database
+      - key: DATABASE_URL
+        sync: false
+      # Redis (optional, fallback to in-memory)
+      - key: REDIS_URL
+        sync: false
+      # Clerk Auth
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_WEBHOOK_SECRET
+        sync: false
+      # Cloudflare R2
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
+      - key: R2_PUBLIC_URL
+        sync: false
+      # AI Provider
+      - key: AI_PROVIDER
+        value: claude
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GOOGLE_AI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.0-flash
+      # Stripe
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_ID_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_ID_ANNUAL
+        sync: false
+      - key: STRIPE_PRICE_ID_BASIC_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_ID_BASIC_ANNUAL
+        sync: false
+      - key: STRIPE_PRICE_ID_PREMIUM_MONTHLY
+        sync: false
+      - key: STRIPE_PRICE_ID_PREMIUM_ANNUAL
+        sync: false
+      # Razorpay
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      # App Config
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: USE_MOCK_AUTH
+        value: "false"
+      - key: USE_MOCK_AI
+        value: "false"
+      - key: APP_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      # Observability
+      - key: SENTRY_DSN
+        sync: false
+      - key: POSTHOG_KEY
+        sync: false
+      - key: POSTHOG_HOST
+        value: https://app.posthog.com
